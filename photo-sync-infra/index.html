@@ -1,0 +1,155 @@
+<!DOCTYPE html>
+<html lang="en">
+<head>
+  <meta charset="UTF-8" />
+  <meta name="viewport" content="width=device-width, initial-scale=1.0" />
+  <title>QT Photo Sync Demo</title>
+  <style>
+    body {
+      font-family: Arial, sans-serif;
+      max-width: 700px;
+      margin: 40px auto;
+      padding: 0 16px;
+    }
+    .card {
+      border: 1px solid #ddd;
+      border-radius: 8px;
+      padding: 16px;
+      margin-top: 16px;
+    }
+    button {
+      padding: 10px 14px;
+      cursor: pointer;
+    }
+    pre {
+      background: #f6f6f6;
+      padding: 12px;
+      overflow-x: auto;
+    }
+  </style>
+</head>
+<body>
+  <h1>QT Photo Sync Demo</h1>
+  <p>Select a file and upload it using a presigned S3 URL.</p>
+
+  <input type="file" id="fileInput" />
+  <button id="uploadBtn">Upload</button>
+
+  <div class="card">
+    <h3>Status</h3>
+    <div id="status">Idle</div>
+  </div>
+
+  <div class="card">
+    <h3>Response</h3>
+    <pre id="output">No response yet.</pre>
+  </div>
+
+  <script>
+    const fileInput = document.getElementById("fileInput");
+    const uploadBtn = document.getElementById("uploadBtn");
+    const statusEl = document.getElementById("status");
+    const outputEl = document.getElementById("output");
+
+    function setStatus(msg) {
+      statusEl.textContent = msg;
+    }
+
+    function setOutput(obj) {
+      outputEl.textContent = JSON.stringify(obj, null, 2);
+    }
+
+    async function computeSHA256(file) {
+      const arrayBuffer = await file.arrayBuffer();
+      const hashBuffer = await crypto.subtle.digest("SHA-256", arrayBuffer);
+      const hashArray = Array.from(new Uint8Array(hashBuffer));
+      return hashArray.map(b => b.toString(16).padStart(2, "0")).join("");
+    }
+
+    uploadBtn.addEventListener("click", async () => {
+      const file = fileInput.files[0];
+
+      if (!file) {
+        setStatus("Please choose a file first.");
+        return;
+      }
+
+      try {
+        setStatus("Computing SHA-256...");
+        const fileHash = await computeSHA256(file);
+
+        setStatus("Requesting presigned URL...");
+        const presignRes = await fetch("http://localhost:3000/upload-url", {
+          method: "POST",
+          headers: { "Content-Type": "application/json" },
+          body: JSON.stringify({
+            fileName: file.name,
+            contentType: file.type || "application/octet-stream",
+            sizeBytes: file.size,
+            fileHash
+          })
+        });
+
+        const presignData = await presignRes.json();
+
+        if (!presignRes.ok) {
+          setStatus("Failed to get upload URL.");
+          setOutput(presignData);
+          return;
+        }
+
+        if (presignData.duplicate) {
+          setStatus("Duplicate detected. Upload skipped.");
+          setOutput(presignData);
+          return;
+        }
+
+        setStatus("Uploading directly to S3...");
+        const uploadRes = await fetch(presignData.uploadUrl, {
+          method: "PUT",
+          headers: {
+            "Content-Type": file.type || "application/octet-stream"
+          },
+          body: file
+        });
+
+        if (!uploadRes.ok) {
+          const uploadText = await uploadRes.text();
+          setStatus("S3 upload failed.");
+          setOutput({ status: uploadRes.status, body: uploadText });
+          return;
+        }
+
+        setStatus("Finalizing metadata...");
+        const completeRes = await fetch("http://localhost:3000/upload-complete", {
+          method: "POST",
+          headers: { "Content-Type": "application/json" },
+          body: JSON.stringify({
+            photoId: presignData.photoId,
+            fileName: file.name,
+            s3Key: presignData.s3Key,
+            contentType: file.type || "application/octet-stream",
+            sizeBytes: file.size,
+            fileHash
+          })
+        });
+
+        const completeData = await completeRes.json();
+
+        if (!completeRes.ok) {
+          setStatus("Metadata save failed.");
+          setOutput(completeData);
+          return;
+        }
+
+        setStatus("Upload complete.");
+        setOutput(completeData);
+      } catch (err) {
+        setStatus("Unexpected error.");
+        setOutput({ error: String(err) });
+      }
+    });
+  </script>
+</body>
+</html>
+

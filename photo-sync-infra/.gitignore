@@ -1,0 +1,42 @@
+breadcrumbs.txt
+
+*.js
+!jest.config.js
+*.d.ts
+node_modules
+
+# CDK asset staging directory
+.cdk.staging
+cdk.out
+
+# Node
+node_modules/
+npm-debug.log*
+yarn-error.log*
+
+# Build / CDK
+cdk.out/
+dist/
+build/
+
+# Environment / secrets
+.env
+.env.*
+
+# OS / editor
+.DS_Store
+*.swp
+*.swo
+
+# Logs
+logs/
+*.log
+
+# Local test files / assets
+*.jpeg
+*.jpg
+*.png
+*.txt
+
+# Misc
+coverage/
