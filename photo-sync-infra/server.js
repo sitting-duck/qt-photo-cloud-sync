@@ -281,7 +281,8 @@ app.get("/photos", async (req, res) => {
           const imageUrl = await getSignedUrl(s3, getCommand, { expiresIn: 3600 });
 
           return { ...item, imageUrl };
-        } catch {
+        } catch (error) {
+          console.log("Skipping bad gallery item:", item.s3Key);
           return null;
         }
       })
@@ -395,6 +396,8 @@ app.get("/", (req, res) => {
   </div>
 
   <script>
+    const API_BASE_URL = "https://npuctj4dl3.execute-api.us-east-1.amazonaws.com/prod/".replace(/\\/$/, "");
+
     const fileInput = document.getElementById("fileInput");
     const uploadBtn = document.getElementById("uploadBtn");
     const refreshBtn = document.getElementById("refreshBtn");
@@ -423,14 +426,16 @@ app.get("/", (req, res) => {
       const arrayBuffer = await file.arrayBuffer();
       const hashBuffer = await crypto.subtle.digest("SHA-256", arrayBuffer);
       const hashArray = Array.from(new Uint8Array(hashBuffer));
-      return hashArray.map(b => b.toString(16).padStart(2, "0")).join("");
+      return hashArray.map(function (b) {
+        return b.toString(16).padStart(2, "0");
+      }).join("");
     }
 
     async function loadGallery() {
       galleryEl.textContent = "Loading...";
 
       try {
-        const res = await fetch("/photos");
+        const res = await fetch(API_BASE_URL + "/photos");
         const data = await res.json();
 
         if (!res.ok) {
@@ -445,24 +450,31 @@ app.get("/", (req, res) => {
           return;
         }
 
-        galleryEl.innerHTML = \`
-          <div class="grid">
-            \${photos.map(photo => \`
-              <div class="photo-card">
-                <img class="thumb" src="\${escapeHtml(photo.imageUrl)}" alt="\${escapeHtml(photo.fileName || "photo")}" />
-                <div class="meta"><span class="label">File:</span> \${escapeHtml(photo.fileName || "")}</div>
-                <div class="meta"><span class="label">Photo ID:</span> \${escapeHtml(photo.photoId || "")}</div>
-                <div class="meta"><span class="label">Uploaded:</span> \${escapeHtml(photo.uploadedAt || "")}</div>
-                <div class="meta"><span class="label">Type:</span> \${escapeHtml(photo.contentType || "")}</div>
-                <div class="meta"><span class="label">Size:</span> \${escapeHtml(String(photo.sizeBytes || ""))}</div>
-                <div class="actions">
-                  <button onclick="deletePhoto('\${photo.photoId}')">Delete</button>
-                </div>
-              </div>
-            \`).join("")}
-          </div>
-        \`;
+        let html = '<div class="grid">';
+
+        photos.forEach(function (photo) {
+          html += '<div class="photo-card">';
+          html += '<img class="thumb" src="' + escapeHtml(photo.imageUrl) + '" alt="' + escapeHtml(photo.fileName || "photo") + '" />';
+          html += '<div class="meta"><span class="label">File:</span> ' + escapeHtml(photo.fileName || "") + '</div>';
+          html += '<div class="meta"><span class="label">Photo ID:</span> ' + escapeHtml(photo.photoId || "") + '</div>';
+          html += '<div class="meta"><span class="label">Uploaded:</span> ' + escapeHtml(photo.uploadedAt || "") + '</div>';
+          html += '<div class="meta"><span class="label">Type:</span> ' + escapeHtml(photo.contentType || "") + '</div>';
+          html += '<div class="meta"><span class="label">Size:</span> ' + escapeHtml(String(photo.sizeBytes || "")) + '</div>';
+          html += '<div class="actions"><button data-photo-id="' + escapeHtml(photo.photoId || "") + '" class="delete-btn">Delete</button></div>';
+          html += '</div>';
+        });
+
+        html += '</div>';
+        galleryEl.innerHTML = html;
+
+        document.querySelectorAll(".delete-btn").forEach(function (button) {
+          button.addEventListener("click", function () {
+            const photoId = button.getAttribute("data-photo-id");
+            deletePhoto(photoId);
+          });
+        });
       } catch (err) {
+        console.error("Gallery UI error:", err);
         galleryEl.innerHTML = "<div class='empty'>Unexpected gallery error.</div>";
       }
     }
@@ -471,7 +483,7 @@ app.get("/", (req, res) => {
       const confirmed = window.confirm("Delete this photo?");
       if (!confirmed) return;
 
-      const response = await fetch("/photos/" + photoId, {
+      const response = await fetch(API_BASE_URL + "/photos/" + photoId, {
         method: "DELETE"
       });
 
@@ -487,7 +499,7 @@ app.get("/", (req, res) => {
       await loadGallery();
     }
 
-    uploadBtn.addEventListener("click", async () => {
+    uploadBtn.addEventListener("click", async function () {
       const file = fileInput.files[0];
 
       if (!file) {
@@ -500,14 +512,14 @@ app.get("/", (req, res) => {
         const fileHash = await computeSHA256(file);
 
         setStatus("Requesting presigned URL...");
-        const presignRes = await fetch("/upload-url", {
+        const presignRes = await fetch(API_BASE_URL + "/upload-url", {
           method: "POST",
           headers: { "Content-Type": "application/json" },
           body: JSON.stringify({
             fileName: file.name,
             contentType: file.type || "application/octet-stream",
             sizeBytes: file.size,
-            fileHash
+            fileHash: fileHash
           })
         });
 
@@ -543,7 +555,7 @@ app.get("/", (req, res) => {
         }
 
         setStatus("Finalizing metadata...");
-        const completeRes = await fetch("/upload-complete", {
+        const completeRes = await fetch(API_BASE_URL + "/upload-complete", {
           method: "POST",
           headers: { "Content-Type": "application/json" },
           body: JSON.stringify({
@@ -552,7 +564,7 @@ app.get("/", (req, res) => {
             s3Key: presignData.s3Key,
             contentType: file.type || "application/octet-stream",
             sizeBytes: file.size,
-            fileHash
+            fileHash: fileHash
           })
         });
 
@@ -569,6 +581,7 @@ app.get("/", (req, res) => {
         fileInput.value = "";
         await loadGallery();
       } catch (err) {
+        console.error("Upload UI error:", err);
         setStatus("Unexpected error.");
         setOutput({ error: String(err) });
       }
