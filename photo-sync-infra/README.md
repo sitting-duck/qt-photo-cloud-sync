@@ -1,14 +1,45 @@
-# Welcome to your CDK TypeScript project
+# QT Photo Sync Demo
 
-This is a blank project for CDK development with TypeScript.
+A small AWS-based photo sync prototype built for demo/interview purposes.
 
-The `cdk.json` file tells the CDK Toolkit how to execute your app.
+## What it does
 
-## Useful commands
+- Uploads photos from a browser using a presigned S3 URL
+- Stores photo metadata in DynamoDB
+- Detects duplicate uploads using a SHA-256 file hash
+- Lists uploaded photos in a gallery
+- Deletes photos from both S3 and DynamoDB
 
-* `npm run build`   compile typescript to js
-* `npm run watch`   watch for changes and compile
-* `npm run test`    perform the jest unit tests
-* `npx cdk deploy`  deploy this stack to your default AWS account/region
-* `npx cdk diff`    compare deployed stack with current state
-* `npx cdk synth`   emits the synthesized CloudFormation template
+## Architecture
+
+- **S3**: stores the image files
+- **DynamoDB**: stores photo metadata
+- **Lambda**: backend logic
+- **API Gateway**: HTTP endpoints
+- **Static frontend**: simple HTML page served locally
+
+## API endpoints
+
+- `POST /upload-url`
+- `POST /upload-complete`
+- `GET /photos`
+- `DELETE /photos/{photoId}`
+
+## Project structure
+
+```text
+photo-sync-infra/
+├── bin/
+├── frontend/
+│   └── index.html
+├── lambda/
+│   ├── upload-url.js
+│   ├── upload-complete.js
+│   ├── get-photos.js
+│   ├── delete-photo.js
+│   └── shared/
+├── lib/
+│   └── photo-sync-infra-stack.ts
+├── package.json
+└── setup.sh
+
