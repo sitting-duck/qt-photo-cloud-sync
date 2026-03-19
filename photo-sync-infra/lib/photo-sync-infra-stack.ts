@@ -14,12 +14,12 @@ export class PhotoSyncInfraStack extends cdk.Stack {
       autoDeleteObjects: true,
       cors: [
         {
+          allowedOrigins: ['http://localhost:3000', 'http://localhost:8000'],
           allowedMethods: [
             s3.HttpMethods.GET,
             s3.HttpMethods.PUT,
             s3.HttpMethods.HEAD,
           ],
-          allowedOrigins: ['http://localhost:3000'],
           allowedHeaders: ['*'],
           exposedHeaders: ['ETag'],
         },
