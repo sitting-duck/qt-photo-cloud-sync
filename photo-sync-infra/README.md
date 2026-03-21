@@ -42,4 +42,5 @@ photo-sync-infra/
 │   └── photo-sync-infra-stack.ts
 ├── package.json
 └── setup.sh
+```
 
