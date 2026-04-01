@@ -1,5 +1,16 @@
 # QT Photo Sync Demo
 
+to run this demo run 
+``` bash
+
+node server.js 
+```
+from the root directory.
+
+then run the Android project from Android Studio
+
+------
+
 A small AWS-based photo sync prototype built for demo/interview purposes.
 
 ## What it does
